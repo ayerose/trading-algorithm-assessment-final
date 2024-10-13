@@ -24,8 +24,8 @@ jobs:
 
       # build the project using Maven wrapper and install dependencies
       - name: Build with Maven
-        run: ./mvnw clean install
+        run: mvn clean install -U
 
       # run all tests
       - name: Run all tests
-        run: ./mvnw test
+        run:  mvn -pl algo-exercise/getting-started test
