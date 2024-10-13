@@ -19,7 +19,7 @@ jobs:
       - name: Set up JDK
         uses: actions/setup-java@v3
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'temurin'
 
       # build the project using Maven wrapper and install dependencies
@@ -28,4 +28,4 @@ jobs:
 
       # run all tests
       - name: Run all tests
-        run:  mvn -pl algo-exercise/getting-started test
+        run:  mvn test
