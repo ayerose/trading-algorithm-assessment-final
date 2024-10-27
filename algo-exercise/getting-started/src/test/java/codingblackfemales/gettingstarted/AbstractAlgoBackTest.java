@@ -55,7 +55,7 @@ public abstract class AbstractAlgoBackTest extends SequencerTestCase {
 
     public abstract AlgoLogic createAlgoLogic();
 
-    protected UnsafeBuffer createTick(){
+    protected UnsafeBuffer createTick() {
         final MessageHeaderEncoder headerEncoder = new MessageHeaderEncoder();
         final BookUpdateEncoder encoder = new BookUpdateEncoder();
 
@@ -87,7 +87,7 @@ public abstract class AbstractAlgoBackTest extends SequencerTestCase {
         return directBuffer;
     }
 
-    protected UnsafeBuffer createTick2(){
+    protected UnsafeBuffer createTick2() {
 
         final MessageHeaderEncoder headerEncoder = new MessageHeaderEncoder();
         final BookUpdateEncoder encoder = new BookUpdateEncoder();
@@ -118,6 +118,7 @@ public abstract class AbstractAlgoBackTest extends SequencerTestCase {
 
         return directBuffer;
     }
+
     protected UnsafeBuffer createTick3() {
         final MessageHeaderEncoder headerEncoder = new MessageHeaderEncoder();
         final BookUpdateEncoder encoder = new BookUpdateEncoder();
@@ -146,6 +147,7 @@ public abstract class AbstractAlgoBackTest extends SequencerTestCase {
 
         return directBuffer;
     }
+
     protected UnsafeBuffer createTickLowLiquidity() {
         final MessageHeaderEncoder headerEncoder = new MessageHeaderEncoder();
         final BookUpdateEncoder encoder = new BookUpdateEncoder();
@@ -169,6 +171,7 @@ public abstract class AbstractAlgoBackTest extends SequencerTestCase {
 
         return directBuffer;
     }
+
     protected UnsafeBuffer createTickHighPrices() {
         final MessageHeaderEncoder headerEncoder = new MessageHeaderEncoder();
         final BookUpdateEncoder encoder = new BookUpdateEncoder();
@@ -196,6 +199,7 @@ public abstract class AbstractAlgoBackTest extends SequencerTestCase {
 
         return directBuffer;
     }
+
     protected UnsafeBuffer createTickWithTightSpread() {
         final MessageHeaderEncoder headerEncoder = new MessageHeaderEncoder();
         final BookUpdateEncoder encoder = new BookUpdateEncoder();
@@ -220,6 +224,180 @@ public abstract class AbstractAlgoBackTest extends SequencerTestCase {
                 .next().price(105L).size(200L)
                 .next().price(110L).size(300L);
 
+        return directBuffer;
+    }
+
+    protected UnsafeBuffer createTickWithWideSpread() {
+        final MessageHeaderEncoder headerEncoder = new MessageHeaderEncoder();
+        final BookUpdateEncoder encoder = new BookUpdateEncoder();
+
+        final ByteBuffer byteBuffer = ByteBuffer.allocateDirect(1024);
+        final UnsafeBuffer directBuffer = new UnsafeBuffer(byteBuffer);
+
+        encoder.wrapAndApplyHeader(directBuffer, 0, headerEncoder);
+
+        encoder.venue(Venue.XLON);
+        encoder.instrumentId(123L);
+        encoder.source(Source.STREAM);
+
+        // wide spread: bid = 90 // ask = 110 // spread = 20, which exceeds spread_thresh
+        encoder.bidBookCount(3)
+                .next().price(90L).size(100L)
+                .next().price(89L).size(200L)
+                .next().price(88L).size(300L);
+
+        encoder.askBookCount(3)
+                .next().price(110L).size(101L)
+                .next().price(115L).size(200L)
+                .next().price(120L).size(300L);
+
+        encoder.instrumentStatus(InstrumentStatus.CONTINUOUS);
+
+        return directBuffer;
+    }
+
+    protected UnsafeBuffer createTickLow() {
+        final MessageHeaderEncoder headerEncoder = new MessageHeaderEncoder();
+        final BookUpdateEncoder encoder = new BookUpdateEncoder();
+
+        final ByteBuffer byteBuffer = ByteBuffer.allocateDirect(1024);
+        final UnsafeBuffer directBuffer = new UnsafeBuffer(byteBuffer);
+
+        encoder.wrapAndApplyHeader(directBuffer, 0, headerEncoder);
+        encoder.venue(Venue.XLON);
+        encoder.instrumentId(123L);
+
+
+        encoder.bidBookCount(3)
+                .next().price(90L).size(100L)
+                .next().price(88L).size(200L)
+                .next().price(85L).size(300L);
+
+        encoder.askBookCount(3)
+                .next().price(92L).size(150L)
+                .next().price(95L).size(300L)
+                .next().price(98L).size(500L);
+
+        encoder.instrumentStatus(InstrumentStatus.CONTINUOUS);
+        encoder.source(Source.STREAM);
+
+        return directBuffer;
+    }
+
+
+    protected UnsafeBuffer createTickHigh() {
+        final MessageHeaderEncoder headerEncoder = new MessageHeaderEncoder();
+        final BookUpdateEncoder encoder = new BookUpdateEncoder();
+
+        final ByteBuffer byteBuffer = ByteBuffer.allocateDirect(1024);
+        final UnsafeBuffer directBuffer = new UnsafeBuffer(byteBuffer);
+
+        encoder.wrapAndApplyHeader(directBuffer, 0, headerEncoder);
+        encoder.venue(Venue.XLON);
+        encoder.instrumentId(123L);
+
+        // higher prices to encourage selling
+        encoder.bidBookCount(3)
+                .next().price(105L).size(100L)
+                .next().price(102L).size(200L)
+                .next().price(100L).size(300L);
+
+        encoder.askBookCount(3)
+                .next().price(108L).size(150L)
+                .next().price(110L).size(300L)
+                .next().price(115L).size(500L);
+
+        encoder.instrumentStatus(InstrumentStatus.CONTINUOUS);
+        encoder.source(Source.STREAM);
+
+        return directBuffer;
+    }
+
+
+
+    // low price scenario to trigger a buy
+    protected UnsafeBuffer createTickLowBuyOpportunity() {
+        final MessageHeaderEncoder headerEncoder = new MessageHeaderEncoder();
+        final BookUpdateEncoder encoder = new BookUpdateEncoder();
+        final ByteBuffer byteBuffer = ByteBuffer.allocateDirect(1024);
+        final UnsafeBuffer directBuffer = new UnsafeBuffer(byteBuffer);
+
+        encoder.wrapAndApplyHeader(directBuffer, 0, headerEncoder);
+        encoder.instrumentId(123L);
+        encoder.venue(Venue.XLON);
+        encoder.source(Source.STREAM);
+
+        encoder.bidBookCount(1)
+                .next().price(80L).size(100L);
+
+        encoder.askBookCount(1)
+                .next().price(85L).size(150L);
+
+        encoder.instrumentStatus(InstrumentStatus.CONTINUOUS);
+        return directBuffer;
+    }
+
+    protected UnsafeBuffer createTickMedium() {
+        final MessageHeaderEncoder headerEncoder = new MessageHeaderEncoder();
+        final BookUpdateEncoder encoder = new BookUpdateEncoder();
+        final ByteBuffer byteBuffer = ByteBuffer.allocateDirect(1024);
+        final UnsafeBuffer directBuffer = new UnsafeBuffer(byteBuffer);
+
+        encoder.wrapAndApplyHeader(directBuffer, 0, headerEncoder);
+        encoder.instrumentId(123L);
+        encoder.venue(Venue.XLON);
+        encoder.source(Source.STREAM);
+
+        encoder.bidBookCount(1)
+                .next().price(90L).size(100L);
+
+        encoder.askBookCount(1)
+                .next().price(92L).size(150L);
+
+        encoder.instrumentStatus(InstrumentStatus.CONTINUOUS);
+        return directBuffer;
+    }
+
+    // high price scenario to trigger a profitable sell
+    protected UnsafeBuffer createTickHighSellOpportunity() {
+        final MessageHeaderEncoder headerEncoder = new MessageHeaderEncoder();
+        final BookUpdateEncoder encoder = new BookUpdateEncoder();
+        final ByteBuffer byteBuffer = ByteBuffer.allocateDirect(1024);
+        final UnsafeBuffer directBuffer = new UnsafeBuffer(byteBuffer);
+
+        encoder.wrapAndApplyHeader(directBuffer, 0, headerEncoder);
+        encoder.instrumentId(123L);
+        encoder.venue(Venue.XLON);
+        encoder.source(Source.STREAM);
+
+        encoder.bidBookCount(1)
+                .next().price(105L).size(100L);
+        encoder.askBookCount(1)
+                .next().price(110L).size(150L);
+
+        encoder.instrumentStatus(InstrumentStatus.CONTINUOUS);
+        return directBuffer;
+    }
+
+    // stable high prices to maintain selling environment
+    protected UnsafeBuffer createTickStableHigh() {
+        final MessageHeaderEncoder headerEncoder = new MessageHeaderEncoder();
+        final BookUpdateEncoder encoder = new BookUpdateEncoder();
+        final ByteBuffer byteBuffer = ByteBuffer.allocateDirect(1024);
+        final UnsafeBuffer directBuffer = new UnsafeBuffer(byteBuffer);
+
+        encoder.wrapAndApplyHeader(directBuffer, 0, headerEncoder);
+        encoder.instrumentId(123L);
+        encoder.venue(Venue.XLON);
+        encoder.source(Source.STREAM);
+
+        encoder.bidBookCount(1)
+                .next().price(107L).size(100L);
+
+        encoder.askBookCount(1)
+                .next().price(112L).size(150L);
+
+        encoder.instrumentStatus(InstrumentStatus.CONTINUOUS);
         return directBuffer;
     }
 
