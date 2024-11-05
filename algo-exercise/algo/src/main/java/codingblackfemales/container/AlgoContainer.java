@@ -1,3 +1,4 @@
+
 package codingblackfemales.container;
 
 import codingblackfemales.action.NoAction;
@@ -31,34 +32,37 @@ public class AlgoContainer implements Consumer {
         this.state = new SimpleAlgoStateImpl(marketDataService, orderService);
     }
 
-    public MarketDataService getMarketDataService(){
+    public MarketDataService getMarketDataService() {
         return marketDataService;
     }
 
-    public OrderService getOrderService(){
+    public OrderService getOrderService() {
         return orderService;
     }
 
-    public void setLogic(AlgoLogic logic){
+    public void setLogic(AlgoLogic logic) {
         this.logic = logic;
     }
 
-    @Override
-    public void onMessage(DirectBuffer buffer){
-        if(runTrigger.shouldRun()){
-            runAlgoLogic();
+    public AlgoLogic getAlgoLogic() {
+        return logic;
+    }
 
-        }else {
-            //do nothing...
+    @Override
+    public void onMessage(DirectBuffer buffer) {
+        if (runTrigger.shouldRun()) {
+            runAlgoLogic();
+        } else {
+            // do nothing...
         }
     }
 
-    private void runAlgoLogic(){
+    private void runAlgoLogic() {
         final var action = logic.evaluate(state);
 
         runTrigger.hasRun();
 
-        if(action !=null && (!action.equals(NoAction.NoAction))){
+        if (action != null && (!action.equals(NoAction.NoAction))) {
             actioner.processAction(action);
         }
     }
