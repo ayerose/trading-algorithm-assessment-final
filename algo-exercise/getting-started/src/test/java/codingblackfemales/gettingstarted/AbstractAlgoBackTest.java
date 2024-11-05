@@ -1,3 +1,4 @@
+
 package codingblackfemales.gettingstarted;
 
 import codingblackfemales.algo.AlgoLogic;
@@ -16,6 +17,8 @@ import codingblackfemales.sequencer.net.TestNetwork;
 import codingblackfemales.service.MarketDataService;
 import codingblackfemales.service.OrderService;
 import messages.marketdata.*;
+import codingblackfemales.gettingstarted.StretchAlgoLogic;
+
 import org.agrona.concurrent.UnsafeBuffer;
 
 import java.nio.ByteBuffer;
@@ -24,6 +27,9 @@ public abstract class AbstractAlgoBackTest extends SequencerTestCase {
 
 
     protected AlgoContainer container;
+
+    protected StretchAlgoLogic stretchAlgoLogic;
+
 
     @Override
     public Sequencer getSequencer() {
@@ -314,7 +320,6 @@ public abstract class AbstractAlgoBackTest extends SequencerTestCase {
     }
 
 
-
     // low price scenario to trigger a buy
     protected UnsafeBuffer createTickLowBuyOpportunity() {
         final MessageHeaderEncoder headerEncoder = new MessageHeaderEncoder();
@@ -400,5 +405,157 @@ public abstract class AbstractAlgoBackTest extends SequencerTestCase {
         encoder.instrumentStatus(InstrumentStatus.CONTINUOUS);
         return directBuffer;
     }
+
+    // Initial low prices for buying opportunities
+    protected UnsafeBuffer createBullishTickLow() {
+        final MessageHeaderEncoder headerEncoder = new MessageHeaderEncoder();
+        final BookUpdateEncoder encoder = new BookUpdateEncoder();
+        final ByteBuffer byteBuffer = ByteBuffer.allocateDirect(1024);
+        final UnsafeBuffer directBuffer = new UnsafeBuffer(byteBuffer);
+
+        encoder.wrapAndApplyHeader(directBuffer, 0, headerEncoder);
+        encoder.instrumentId(123L);
+        encoder.venue(Venue.XLON);
+        encoder.source(Source.STREAM);
+
+        encoder.bidBookCount(1)
+                .next().price(90L).size(100L);
+
+        encoder.askBookCount(1)
+                .next().price(92L).size(150L);
+
+        encoder.instrumentStatus(InstrumentStatus.CONTINUOUS);
+        return directBuffer;
+    }
+
+    // Mid-level prices showing upward trend
+    protected UnsafeBuffer createBullishTickMid() {
+        final MessageHeaderEncoder headerEncoder = new MessageHeaderEncoder();
+        final BookUpdateEncoder encoder = new BookUpdateEncoder();
+        final ByteBuffer byteBuffer = ByteBuffer.allocateDirect(1024);
+        final UnsafeBuffer directBuffer = new UnsafeBuffer(byteBuffer);
+
+        encoder.wrapAndApplyHeader(directBuffer, 0, headerEncoder);
+        encoder.instrumentId(123L);
+        encoder.venue(Venue.XLON);
+        encoder.source(Source.STREAM);
+
+        encoder.bidBookCount(1)
+                .next().price(95L).size(100L);
+
+        encoder.askBookCount(1)
+                .next().price(98L).size(150L);
+
+        encoder.instrumentStatus(InstrumentStatus.CONTINUOUS);
+        return directBuffer;
+    }
+
+    // Higher prices for potential selling opportunities
+    protected UnsafeBuffer createBullishTickHigh() {
+        final MessageHeaderEncoder headerEncoder = new MessageHeaderEncoder();
+        final BookUpdateEncoder encoder = new BookUpdateEncoder();
+        final ByteBuffer byteBuffer = ByteBuffer.allocateDirect(1024);
+        final UnsafeBuffer directBuffer = new UnsafeBuffer(byteBuffer);
+
+        encoder.wrapAndApplyHeader(directBuffer, 0, headerEncoder);
+        encoder.instrumentId(123L);
+        encoder.venue(Venue.XLON);
+        encoder.source(Source.STREAM);
+
+        encoder.bidBookCount(1)
+                .next().price(105L).size(100L);
+
+        encoder.askBookCount(1)
+                .next().price(108L).size(150L);
+
+        encoder.instrumentStatus(InstrumentStatus.CONTINUOUS);
+        return directBuffer;
+    }
+
+    // Stable high prices to confirm an ongoing bullish environment
+    protected UnsafeBuffer createBullishTickStableHigh() {
+        final MessageHeaderEncoder headerEncoder = new MessageHeaderEncoder();
+        final BookUpdateEncoder encoder = new BookUpdateEncoder();
+        final ByteBuffer byteBuffer = ByteBuffer.allocateDirect(1024);
+        final UnsafeBuffer directBuffer = new UnsafeBuffer(byteBuffer);
+
+        encoder.wrapAndApplyHeader(directBuffer, 0, headerEncoder);
+        encoder.instrumentId(123L);
+        encoder.venue(Venue.XLON);
+        encoder.source(Source.STREAM);
+
+        encoder.bidBookCount(1)
+                .next().price(107L).size(100L);
+
+        encoder.askBookCount(1)
+                .next().price(110L).size(150L);
+
+        encoder.instrumentStatus(InstrumentStatus.CONTINUOUS);
+        return directBuffer;
+    }
+
+    // Tick with initial values for VWAP setup
+    protected UnsafeBuffer createInitialOrderTick() {
+        final MessageHeaderEncoder headerEncoder = new MessageHeaderEncoder();
+        final BookUpdateEncoder encoder = new BookUpdateEncoder();
+        final ByteBuffer byteBuffer = ByteBuffer.allocateDirect(1024);
+        final UnsafeBuffer directBuffer = new UnsafeBuffer(byteBuffer);
+
+        encoder.wrapAndApplyHeader(directBuffer, 0, headerEncoder);
+        encoder.instrumentId(123L);
+        encoder.venue(Venue.XLON);
+        encoder.source(Source.STREAM);
+
+        encoder.bidBookCount(1)
+                .next().price(100L).size(150L);
+        encoder.askBookCount(1)
+                .next().price(102L).size(100L);
+
+        encoder.instrumentStatus(InstrumentStatus.CONTINUOUS);
+        return directBuffer;
+    }
+
+    // Tick within the cancellation threshold, shouldn't trigger cancellation
+    protected UnsafeBuffer createTickWithinThreshold() {
+        final MessageHeaderEncoder headerEncoder = new MessageHeaderEncoder();
+        final BookUpdateEncoder encoder = new BookUpdateEncoder();
+        final ByteBuffer byteBuffer = ByteBuffer.allocateDirect(1024);
+        final UnsafeBuffer directBuffer = new UnsafeBuffer(byteBuffer);
+
+        encoder.wrapAndApplyHeader(directBuffer, 0, headerEncoder);
+        encoder.instrumentId(123L);
+        encoder.venue(Venue.XLON);
+        encoder.source(Source.STREAM);
+
+        encoder.bidBookCount(1)
+                .next().price(101L).size(150L);  // Close to initial VWAP
+        encoder.askBookCount(1)
+                .next().price(103L).size(100L);  // Close to initial VWAP
+
+        encoder.instrumentStatus(InstrumentStatus.CONTINUOUS);
+        return directBuffer;
+    }
+
+    // Tick beyond the VWAP threshold to trigger cancellation
+    protected UnsafeBuffer createTickBeyondVWAPThreshold() {
+        final MessageHeaderEncoder headerEncoder = new MessageHeaderEncoder();
+        final BookUpdateEncoder encoder = new BookUpdateEncoder();
+        final ByteBuffer byteBuffer = ByteBuffer.allocateDirect(1024);
+        final UnsafeBuffer directBuffer = new UnsafeBuffer(byteBuffer);
+
+        encoder.wrapAndApplyHeader(directBuffer, 0, headerEncoder);
+        encoder.instrumentId(123L);
+        encoder.venue(Venue.XLON);
+        encoder.source(Source.STREAM);
+
+        encoder.bidBookCount(1)
+                .next().price(90L).size(150L);  // Significant deviation to trigger cancellation
+        encoder.askBookCount(1)
+                .next().price(110L).size(100L); // Significant deviation to trigger cancellation
+
+        encoder.instrumentStatus(InstrumentStatus.CONTINUOUS);
+        return directBuffer;
+    }
+
 
 }
