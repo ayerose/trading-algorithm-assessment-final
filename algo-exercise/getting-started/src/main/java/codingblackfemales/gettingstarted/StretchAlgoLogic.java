@@ -1,134 +1,213 @@
 package codingblackfemales.gettingstarted;
-
 import codingblackfemales.action.Action;
 import codingblackfemales.action.CancelChildOrder;
 import codingblackfemales.action.CreateChildOrder;
 import codingblackfemales.action.NoAction;
 import codingblackfemales.algo.AlgoLogic;
+import codingblackfemales.sotw.ChildOrder;
 import codingblackfemales.sotw.SimpleAlgoState;
 import codingblackfemales.sotw.marketdata.AskLevel;
 import codingblackfemales.sotw.marketdata.BidLevel;
-import codingblackfemales.sotw.ChildOrder;
-import codingblackfemales.util.Util;
 import messages.order.Side;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
+import java.util.ArrayList;
 import java.util.List;
 
 public class StretchAlgoLogic implements AlgoLogic {
 
     private static final Logger logger = LoggerFactory.getLogger(StretchAlgoLogic.class);
+    private static final int MAX_ORDERS = 5;
+    private static final int ORDER_QUANTITY = 100;
+    private static final double BUY_THRESHOLD_FACTOR = 0.998; // slightly below vwap for aggressive buying
+    private static final double SELL_THRESHOLD_FACTOR = 1.005;
 
-    private static final double BASE_PROFIT_MARGIN = 0.005;
-    private static final double VOLATILITY_MULTIPLIER = 2;
-    private static final long SPREAD_THRESHOLD = 5;
-    private static final long PRICE_THRESHOLD = 3; // price movement threshold for canceling orders
 
-    private long currentTargetBuyPrice = 100;
-    private long currentTargetSellPrice = 102;
-    private boolean recentlyCancelledBuyOrder = false;
+    private double vwap = 0.0;
+    private boolean vwapInitialized = false;
+    private List<Double> recentBidAverages = new ArrayList<>();
+    private List<Double> recentAskAverages = new ArrayList<>();
+    private static final int TREND_PERIOD = 6;
+    protected static final double CANCEL_THRESHOLD_PERCENTAGE = 0.05;
+    protected static final int PRICE_THRESHOLD = 5;
 
+    public static final String ANSI_RESET = "\u001B[0m";
+    public static final String ANSI_RED = "\u001B[31m";
+    public static final String ANSI_GREEN = "\u001B[32m";
+    public static final String ANSI_YELLOW = "\u001B[33m";
+    public static final String ANSI_BLUE = "\u001B[34m";
+    public static final String ANSI_PURPLE = "\u001B[35m";
+    public static final String ANSI_CYAN = "\u001B[36m";
+    public static final String ANSI_ORANGE = "\u001B[38;5;214m";
+    public static final String ANSI_PINK = "\u001B[38;5;213m";
 
     @Override
     public Action evaluate(SimpleAlgoState state) {
+        if (state == null) {
+            logger.warn(ANSI_YELLOW + "[MYSTRETCHALGO] State is null. No action taken." + ANSI_RESET);
+            return NoAction.NoAction;
+        }
 
-        var orderBookAsString = Util.orderBookToString(state);
-        if (orderBookAsString != null) {
-            logger.info("[MYPROFITALGO] Order book state:\n" + orderBookAsString);
+        // log initial vwap setup
+        if (!vwapInitialized) {
+            initializeVWAP(state);
+            vwapInitialized = true;
+            logger.info(ANSI_PINK + "[MYSTRETCHALGO] Initial VWAP set to " + vwap + ANSI_RESET);
+
         } else {
-            logger.warn("[MYPROFITALGO] Order book data is missing or incomplete.");
+            updateVWAP(state);
         }
 
-        logger.info("[MYPROFITALGO] Current Target Buy Price: £" + currentTargetBuyPrice);
-        logger.info("[MYPROFITALGO] Current Target Sell Price: £" + currentTargetSellPrice);
+        // Log order book state
+        var orderBookAsString = state.toString();
+        logger.info(ANSI_CYAN + "[MYSTRETCHALGO] Order book state:\n" + orderBookAsString + ANSI_RESET);
 
-
-        // exit if too many child orders exist
-        if (state.getChildOrders().size() > 20) {
+        // Get bid and ask levels
+        BidLevel bestBid = state.getBidAt(0);
+        AskLevel bestAsk = state.getAskAt(0);
+        if (bestBid == null || bestAsk == null) {
+            logger.warn(ANSI_YELLOW + "[AMYSTRETCHALGO] Best bid or ask is null. No action taken." + ANSI_RESET);
             return NoAction.NoAction;
         }
 
-        // safely fetch best ask and bid prices
-        final AskLevel bestAskLevel = state.getAskAt(0);
-        final BidLevel bestBidLevel = state.getBidAt(0);
-        if (bestAskLevel == null || bestBidLevel == null) {
-            logger.warn("[MYPROFITALGO] No action taken due to missing ask or bid level.");
-            return NoAction.NoAction;
-        }
+        long bidPrice = bestBid.price;
+        long askPrice = bestAsk.price;
 
-        long bestAskPrice = bestAskLevel.price;
-        long bestBidPrice = bestBidLevel.price;
+        // calc adaptive buy and sell thresholds
+        double buyThreshold = vwap * BUY_THRESHOLD_FACTOR;
+        double sellThreshold = vwap * SELL_THRESHOLD_FACTOR;
 
-        // Check the spread
-        long spread = bestAskPrice - bestBidPrice;
-        if (spread > SPREAD_THRESHOLD) {
-            logger.info("[MYPROFITALGO] Spread too wide: £" + spread + ". No action taken.");
-            return NoAction.NoAction;
-        }
+        // calc recent trends
+        updateTrends(bidPrice, askPrice);
 
-        // adjust buy and sell targets based on current prices and volatility
-        double volatilityFactor = calculateVolatilityFactor(state);
-        updateTargetPrices(bestAskPrice, bestBidPrice, volatilityFactor);
+        logger.info(ANSI_PURPLE+"[MYSTRETCHALGO] VWAP: {}, Buy Threshold: {}, Sell Threshold: {}"+ ANSI_RESET, vwap, buyThreshold, sellThreshold);
 
-        // and retrieve active orders
+        // get active orders only once at the start
         List<ChildOrder> activeOrders = state.getActiveChildOrders();
-        logger.info("[MYPROFITALGO] Active Orders: " + activeOrders);
 
-        //  Check for existing buy orders
-        boolean hasExistingBuyOrderAtAskPrice = activeOrders.stream()
-                .anyMatch(order -> order.getSide() == Side.BUY && order.getPrice() == bestAskPrice);
-
-
-        if (!recentlyCancelledBuyOrder && !hasExistingBuyOrderAtAskPrice && shouldBuy(bestAskPrice, activeOrders)) {
-            recentlyCancelledBuyOrder = false;
-            logger.info("[MYPROFITALGO] Placing buy order at price: £" + bestAskPrice);
-            return new CreateChildOrder(Side.BUY, 100, bestAskPrice); // assuming quantity of 100
+        //  logic: Buy if ask price is below the threshold, sell if bid price is above threshold
+        if (shouldBuy(askPrice, activeOrders.size())) {
+            logger.info(ANSI_GREEN + "[MYSTRETCHALGO] Buy condition met. Placing buy order."+ ANSI_RESET);
+            return new CreateChildOrder(Side.BUY, ORDER_QUANTITY, askPrice);
         }
 
-        if (shouldSell(bestBidPrice, activeOrders)) {
-            logger.info("[MYPROFITALGO] Placing sell order at price: £" + bestBidPrice);
-            return new CreateChildOrder(Side.SELL, 100, bestBidPrice); // assuming quantity of 100
+        if (shouldSell(bidPrice, activeOrders.size())) {
+            logger.info(ANSI_GREEN +"[AMYSTRETCHALGO] Sell condition met. Placing sell order."+ ANSI_RESET);
+            return new CreateChildOrder(Side.SELL, ORDER_QUANTITY, bidPrice);
         }
+// ****CANCEL LOGIC*****
+        if (!activeOrders.isEmpty()) {
+            for (ChildOrder order : activeOrders) {
+                double cancelThreshold = vwap * CANCEL_THRESHOLD_PERCENTAGE;
+                long orderPrice = order.getPrice();
 
-        // cancel orders if the market has moved significantly
-        for (var activeOrder : activeOrders) {
-            if (Math.abs(bestBidPrice - activeOrder.getPrice()) > PRICE_THRESHOLD) {
-                logger.info("[MYPROFITALGO] Cancelling order due to price move: £" + activeOrder.getPrice());
-                recentlyCancelledBuyOrder = activeOrder.getSide() == Side.BUY;
-                return new CancelChildOrder(activeOrder);
+                // calc cancellation conditions
+                boolean cancelDueToVWAPDeviation = Math.abs(orderPrice - askPrice) > cancelThreshold;
+                boolean cancelDueToPriceThreshold = Math.abs(bidPrice - orderPrice) > PRICE_THRESHOLD;
+
+                // log debugging messages
+                logger.info(ANSI_RED + "[MYSTRETCHALGO] Checking cancellation for order with price: " + orderPrice + ANSI_RESET);
+                logger.info(ANSI_RED + "[MYSTRETCHALGO] VWAP: " + vwap + ", Ask Price: " + askPrice + ", Bid Price: " + bidPrice + ANSI_RESET);
+                logger.info(ANSI_RED + "[MYSTRETCHALGO] Cancellation Threshold (VWAP Deviation): " + cancelThreshold +
+                        ", PRICE_THRESHOLD: " + PRICE_THRESHOLD + ANSI_RESET);
+                logger.info(ANSI_RED + "[MYSTRETCHALGO] Condition Check - Cancel Due to VWAP Deviation: " + cancelDueToVWAPDeviation +
+                        ", Cancel Due to Price Threshold: " + cancelDueToPriceThreshold + ANSI_RESET);
+                if (cancelDueToVWAPDeviation || cancelDueToPriceThreshold) {
+                    logger.info(ANSI_RED + "[MYSTRETCHALGO] Canceling order with price: " + orderPrice + " due to threshold deviation." + ANSI_RESET);
+                    return new CancelChildOrder(order);
+                }
             }
         }
 
-
+        logger.info(ANSI_BLUE +"[MYSTRETCHALGO] No action taken."+ ANSI_RESET);
         return NoAction.NoAction;
+
+    }
+    public double getVWAP() {
+        return vwap;
     }
 
-
-
-    private void updateTargetPrices(long bestAskPrice, long bestBidPrice, double volatilityFactor) {
-
-        if (bestAskPrice < currentTargetBuyPrice) {
-            currentTargetBuyPrice = bestAskPrice;
+    private void initializeVWAP(SimpleAlgoState state) {
+        BidLevel bestBid = state.getBidAt(0);
+        AskLevel bestAsk = state.getAskAt(0);
+        if (bestBid != null && bestAsk != null) {
+            vwap = (bestBid.price + bestAsk.price) / 2.0;
+            logger.info("[MYSTRETCHALGO] Initial VWAP set to {}", vwap);
         }
-        // calculate a dynamic sell target using the volatility-adjusted margin
-        double dynamicMargin = BASE_PROFIT_MARGIN * (1 + volatilityFactor * VOLATILITY_MULTIPLIER);
-        currentTargetSellPrice = Math.round(bestBidPrice * (1 + dynamicMargin));
     }
 
-    private boolean shouldBuy(long bestAskPrice, List<ChildOrder> activeOrders) {
-        // buy if ask price is below target and theres room for more active orders
-        return bestAskPrice <= currentTargetBuyPrice && activeOrders.size() < 6;
+    private void updateVWAP(SimpleAlgoState state) {
+        int bidLevels = state.getBidLevels();
+        int askLevels = state.getAskLevels();
+        long totalQuantity = 0;
+        long totalPriceQuantity = 0;
+
+        for (int i = 0; i < Math.max(bidLevels, askLevels); i++) {
+            BidLevel bid = state.getBidAt(i);
+            AskLevel ask = state.getAskAt(i);
+            if (bid != null) {
+                totalQuantity += bid.quantity;
+                totalPriceQuantity += bid.price * bid.quantity;
+            }
+            if (ask != null) {
+                totalQuantity += ask.quantity;
+                totalPriceQuantity += ask.price * ask.quantity;
+            }
+        }
+
+        if (totalQuantity > 0) {
+            vwap = (double) totalPriceQuantity / totalQuantity;
+            logger.info(ANSI_YELLOW+"[MYSTRETCHALGO] VWAP updated to {}"+ANSI_RESET, vwap);
+        } else {
+            logger.warn(ANSI_YELLOW+"[MYSTRETCHALGO] No sufficient data to update VWAP."+ANSI_RESET);
+        }
     }
 
-    private boolean shouldSell(long bestBidPrice, List<ChildOrder> activeOrders) {
-        // sell if bid price meets target and we have active orders to sell
-        return bestBidPrice >= currentTargetSellPrice && !activeOrders.isEmpty();
+    private void updateTrends(long bidPrice, long askPrice) {
+        if (recentBidAverages.size() >= TREND_PERIOD) {
+            recentBidAverages.remove(0);
+            recentAskAverages.remove(0);
+        }
+        recentBidAverages.add((double) bidPrice);
+        recentAskAverages.add((double) askPrice);
+
+        double bidTrend = calculateTrend(recentBidAverages);
+        double askTrend = calculateTrend(recentAskAverages);
+
+        logger.info(ANSI_PURPLE+"[MYSTRETCHALGO] Bid trend: {}, Ask trend: {}"+ANSI_RESET, bidTrend, askTrend);
     }
 
-    private double calculateVolatilityFactor(SimpleAlgoState state) {
-        // placeholder for volatility calculation - returning a dummy factor for now
-        return 1.0;
+    private double calculateTrend(List<Double> prices) {
+        double sum = 0;
+        for (int i = 1; i < prices.size(); i++) {
+            sum += prices.get(i) - prices.get(i - 1);
+        }
+        return sum;
+    }
+
+    boolean shouldBuy(double askPrice, int activeOrdersCount) {
+        // check if there's already an active buy order
+        if (activeOrdersCount >= 1) {
+            logger.info(ANSI_ORANGE +"[MYSTRETCHALGO] Maximum buy orders reached. Skipping additional buy order."+ ANSI_RESET);
+            return false; // stop more buy orders
+        }
+
+        double bidTrend = calculateTrend(recentBidAverages);
+        boolean aggressiveBuyCondition = bidTrend > 1.0 && activeOrdersCount < MAX_ORDERS + 2; // allow more buys in bullish trends
+
+        boolean shouldBuy = activeOrdersCount < MAX_ORDERS && askPrice < vwap * BUY_THRESHOLD_FACTOR;
+        shouldBuy = shouldBuy || aggressiveBuyCondition; // include trend-based buying
+
+        logger.info("[MYSTRETCHALGO] Should Buy: " + shouldBuy + " | askPrice: " + askPrice
+                + " | VWAP * BuyThresholdFactor: " + (vwap * BUY_THRESHOLD_FACTOR)
+                + " | Active Orders Count: " + activeOrdersCount);
+        return shouldBuy;
+    }
+
+    boolean shouldSell(double bidPrice, int activeOrdersCount) {
+        double askTrend = calculateTrend(recentAskAverages);
+        boolean aggressiveSellCondition = askTrend > 1.0 && activeOrdersCount < MAX_ORDERS + 2; // allow more sells in strong ask trends
+
+        return (activeOrdersCount < MAX_ORDERS && bidPrice > vwap * SELL_THRESHOLD_FACTOR) || aggressiveSellCondition;
     }
 }
-
