@@ -536,7 +536,7 @@ public abstract class AbstractAlgoBackTest extends SequencerTestCase {
         return directBuffer;
     }
 
-    // Tick beyond the VWAP threshold to trigger cancellation
+    // tick beyond the VWAP threshold to trigger cancellation
     protected UnsafeBuffer createTickBeyondVWAPThreshold() {
         final MessageHeaderEncoder headerEncoder = new MessageHeaderEncoder();
         final BookUpdateEncoder encoder = new BookUpdateEncoder();
@@ -549,13 +549,11 @@ public abstract class AbstractAlgoBackTest extends SequencerTestCase {
         encoder.source(Source.STREAM);
 
         encoder.bidBookCount(1)
-                .next().price(90L).size(150L);  // Significant deviation to trigger cancellation
+                .next().price(90L).size(150L);
         encoder.askBookCount(1)
-                .next().price(110L).size(100L); // Significant deviation to trigger cancellation
+                .next().price(110L).size(100L);
 
         encoder.instrumentStatus(InstrumentStatus.CONTINUOUS);
         return directBuffer;
     }
-
-
 }
