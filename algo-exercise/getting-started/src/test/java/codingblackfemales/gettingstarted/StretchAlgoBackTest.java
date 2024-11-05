@@ -1,14 +1,21 @@
+
 package codingblackfemales.gettingstarted;
-
+import codingblackfemales.action.Action;
+import codingblackfemales.action.CreateChildOrder;
 import codingblackfemales.algo.AlgoLogic;
-import codingblackfemales.sotw.ChildOrder;
+import codingblackfemales.sotw.SimpleAlgoState;
+import codingblackfemales.sotw.marketdata.AskLevel;
+import codingblackfemales.sotw.marketdata.BidLevel;
 import messages.order.Side;
+import org.agrona.concurrent.UnsafeBuffer;
+import org.junit.Before;
 import org.junit.Test;
-
-import java.util.ArrayList;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 import java.util.List;
-
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.*;
 
 public class StretchAlgoBackTest extends AbstractAlgoBackTest {
 
@@ -16,65 +23,156 @@ public class StretchAlgoBackTest extends AbstractAlgoBackTest {
     public AlgoLogic createAlgoLogic() {
         return new StretchAlgoLogic();
     }
+    @Mock
+    private SimpleAlgoState mockState;
+
+    @Before
+    public void setUp() {
+        MockitoAnnotations.openMocks(this);
+        stretchAlgoLogic = new StretchAlgoLogic();
+    }
+
+    // helper method to replay a market data sequence
+    private void replayMarketDataSequence(List<UnsafeBuffer> sequence) throws Exception {
+        for (UnsafeBuffer tick : sequence) {
+            send(tick);
+        }
+    }
+    //  log current algorithm state
+    private void logCurrentState(String message) {
+        System.out.println(message);
+    }
 
     @Test
-    public void testOverallProfitabilityInBacktest() throws Exception {
-        send(createTickLowBuyOpportunity());
+    public void testStableMarketBehavior() throws Exception {
+        for (int i = 0; i < 10; i++) {
+            send(createTickMedium());
+            verifyNoSignificantActions();
+        }
+    }
+
+    @Test
+    public void testBullishMarketResponse() throws Exception {
+        for (int i = 0; i < 5; i++) {
+            send(createBullishTickLow());
+            logCurrentState("Testing buy condition at low price point");
+        }
+        for (int i = 0; i < 5; i++) {
+            send(createBullishTickMid());
+            logCurrentState("Testing response to upward trend at mid-level prices");
+        }
+        for (int i = 0; i < 5; i++) {
+            send(createBullishTickHigh());
+            logCurrentState("Testing sell condition at high price point");
+        }
+        for (int i = 0; i < 5; i++) {
+            send(createBullishTickStableHigh());
+            logCurrentState("Testing sustained high prices to avoid buying");
+        }
+        verifyExpectedProfitableActions();
+    }
+
+    @Test
+    public void testBearishMarketResponse() throws Exception {
+        send(createTickHigh());
         send(createTickMedium());
-        send(createTickHighSellOpportunity());
+        send(createTickLow());
+        var state = container.getState();
+        assertEquals("Expected buy orders in bearish market.", 1, state.getChildOrders().size());
+        assertEquals("No sell orders expected in bearish market without profit opportunities", 0, state.getCancelledChildOrders().size());
+    }
+
+    @Test
+    public void testVWAPAdjustmentsUnderFluctuatingMarket() throws Exception {
+        send(createTickLowBuyOpportunity());
+        send(createTickWithTightSpread());
+        send(createTickWithWideSpread());
+
+        StretchAlgoLogic algo = (StretchAlgoLogic) container.getAlgoLogic();
+        double initialVWAP = algo.getVWAP();
         send(createTickStableHigh());
 
-        long totalProfit = calculateTotalProfit(container.getState().getChildOrders());
-        System.out.println("Calculated Total Profit: " + totalProfit);
-        assertTrue("Total profit should be positive", totalProfit > 0);
-    }
-
-    private long calculateTotalProfit(List<ChildOrder> childOrders) {
-        long totalProfit = 0;
-
-        System.out.println("Processing child orders for profit calculation...");
-        for (ChildOrder sellOrder : childOrders) {
-            if (sellOrder.getSide() == Side.SELL) {
-                ChildOrder matchingBuyOrder = null;
-                for (ChildOrder buyOrder : childOrders) {
-                    if (buyOrder.getSide() == Side.BUY && buyOrder.getPrice() < sellOrder.getPrice()) {
-                        if (matchingBuyOrder == null || buyOrder.getPrice() < matchingBuyOrder.getPrice()) {
-                            matchingBuyOrder = buyOrder;
-                        }
-                    }
-                }
-
-                if (matchingBuyOrder != null) {
-                    long profit = sellOrder.getPrice() - matchingBuyOrder.getPrice();
-                    System.out.println("Matched Sell Order: " + sellOrder.getPrice() +
-                            " with Buy Order: " + matchingBuyOrder.getPrice() +
-                            " for profit: " + profit);
-                    totalProfit += profit;
-                } else {
-                    System.out.println("No matching buy order found for Sell Order: " + sellOrder.getPrice());
-                }
-            }
-        }
-
-        System.out.println("Total Calculated Profit: " + totalProfit);
-        return totalProfit;
+        double updatedVWAP = algo.getVWAP();
+        assertTrue("VWAP should increase after high price ticks.", updatedVWAP > initialVWAP);
     }
 
     @Test
-    public void testOrderLimitAdherenceInBacktest() throws Exception {
-        for (int i = 0; i < 10; i++) {
-            send(createTick2());
-        }
-        int activeOrdersCount = container.getState().getActiveChildOrders().size();
-        assertTrue("Active orders should not exceed limit of 6", activeOrdersCount <= 6);
+    public void testTrendBasedBuyingAndSelling() throws Exception {
+        BidLevel bidLevel = new BidLevel();
+        bidLevel.setPrice(85);
+        bidLevel.setQuantity(150);
+
+        AskLevel askLevel = new AskLevel();
+        askLevel.setPrice(80);
+        askLevel.setQuantity(100);
+
+        when(mockState.getBidAt(0)).thenReturn(bidLevel);
+        when(mockState.getAskAt(0)).thenReturn(askLevel);
+
+        // initialize vwap  based on  mock data
+        stretchAlgoLogic.evaluate(mockState);
+
+        // assert that initial buy order is created if conditions are met
+        Action buyAction = stretchAlgoLogic.evaluate(mockState);
+        assertTrue("Expected a buy order due to favorable ask price", buyAction instanceof CreateChildOrder);
+
+        // udate bid and ask levels to simulate a selling condition
+        bidLevel.setPrice(110);
+        askLevel.setPrice(105);
+
+        // evaluate new conditions for selling
+        Action sellAction = stretchAlgoLogic.evaluate(mockState);
+        assertTrue("Expected a sell order due to favorable bid price", sellAction instanceof CreateChildOrder);
+    }
+    private void verifyNoSignificantActions() {
+        var state = container.getState();
+        assertTrue("No orders should be created in a stable market.", state.getChildOrders().isEmpty());
+    }
+
+    private void verifyExpectedProfitableActions() {
+        var state = container.getState();
+        long buyOrders = state.getChildOrders().stream().filter(order -> order.getSide() == Side.BUY).count();
+        long sellOrders = state.getChildOrders().stream().filter(order -> order.getSide() == Side.SELL).count();
+        assertTrue("Expected buy orders in bullish market for profitable sell setup.", buyOrders > 0);
+        assertTrue("Expected sell orders after price increase in bullish market.", sellOrders > 0);
     }
 
     @Test
-    public void testOrderCancellationsOnAdverseMovementsInBacktest() throws Exception {
-        send(createTick2());
-        var buyOrder = container.getState().getChildOrders().get(0);
-        send(createTickLowLiquidity());
-        assertTrue(container.getState().getCancelledChildOrders().contains(buyOrder));
+    public void testCancellationInVolatileMarket() throws Exception {
+        List<UnsafeBuffer> volatileMarketSequence = MarketDataSimulator.getVolatileMarketSequence();
+        replayMarketDataSequence(volatileMarketSequence);
+        var state = container.getState();
+        long canceledOrders = state.getCancelledChildOrders().stream().count();
+
+        assertTrue("Orders should be canceled due to rapid price changes in a volatile market", canceledOrders > 0);
+    }
+
+    @Test
+    public void testCancellationInBullishMarket() throws Exception {
+        List<UnsafeBuffer> bullishMarketSequence = MarketDataSimulator.getBullishMarketSequence();
+        replayMarketDataSequence(bullishMarketSequence);
+
+        var state = container.getState();
+        long canceledOrders = state.getCancelledChildOrders().stream().count();
+        assertTrue("Orders should be canceled as prices move above thresholds in a bullish market", canceledOrders > 0);
+    }
+
+    @Test
+    public void testCancellationInBearishMarket() throws Exception {
+        List<UnsafeBuffer> bearishMarketSequence = MarketDataSimulator.getBearishMarketSequence();
+        replayMarketDataSequence(bearishMarketSequence);
+
+        var state = container.getState();
+        long canceledOrders = state.getCancelledChildOrders().stream().count();
+        assertTrue("Orders should be canceled as prices move below thresholds in a bearish market", canceledOrders > 0);
+    }
+    @Test
+    public void testOrderCancellationOnPriceMovementBeyondThreshold() throws Exception {
+        send(createInitialOrderTick());
+        send(createInitialOrderTick());
+        send(createTickBeyondVWAPThreshold());
+
+        var state = container.getState();
+        assertEquals("One order should have been canceled due to price movement beyond threshold", 1, state.getCancelledChildOrders().size());
     }
 }
-
