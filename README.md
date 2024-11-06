@@ -40,15 +40,27 @@ Implement a more advanced algorithm (`StretchAlgoLogic`) that buys at low prices
 The testing framework is divided into isolated tests for verifying logic without market interaction and backtests for integrated testing with market data.
 
 - **MyAlgoTest (Unit Test)**: Checks isolated behavior for order creation and cancellation in `MyAlgoLogic`.
+
+
+
 ![Screenshot 2024-11-06 at 16 20 42](https://github.com/user-attachments/assets/142ff681-750c-498f-a3eb-4eb7fe721007)
 
 - **MyAlgoBackTest (Integration Test)**: Uses a full market data feed and order book, verifying orders against real-time market data.
+
+
+
 ![Screenshot 2024-11-06 at 16 20 30](https://github.com/user-attachments/assets/caa3b33c-e132-4bf5-9982-ea09cdd0d339)
 
 - **StretchAlgoTest (Unit Test)**: Validates the profitability logic and trend-based trading in `StretchAlgoLogic`.
+
+
+
 ![Screenshot 2024-11-06 at 16 20 16](https://github.com/user-attachments/assets/d5e711d2-1711-4338-ac5e-99d253d43785)
 
 - **StretchAlgoBackTest (Integration Test)**: Runs `StretchAlgoLogic` in simulated market conditions, verifying that orders are placed/canceled based on profitability.
+
+
+
 ![Screenshot 2024-11-06 at 16 19 59](https://github.com/user-attachments/assets/907219e2-4cc3-4c22-a8e2-982d7b7c5be9)
 
 ### Key Scenarios Tested 🧪🧪
