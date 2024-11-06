@@ -26,6 +26,10 @@ jobs:
       - name: Build and run tests
         run: mvn test
 
+      - name: Display Test Results
+        if: failure()
+        run: cat algo/target/surefire-reports/*.txt
+
       - name: Success message
         if: success()
         run: echo "All tests passed!"
