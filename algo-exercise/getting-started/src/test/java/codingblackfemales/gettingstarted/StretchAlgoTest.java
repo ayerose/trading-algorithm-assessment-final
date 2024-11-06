@@ -5,8 +5,12 @@ import org.junit.Before;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-
+/**
+ * StretchAlgoTest verifies the behavior of the StretchAlgoLogic class,
+ * focusing on profitability, order management, spread conditions and trend-based trading logic.
+ */
 public class StretchAlgoTest extends AbstractAlgoTest {
+    // Threshold for cancelling orders based on unfavorable market conditions
     private static final double CANCEL_THRESHOLD_PERCENTAGE = 0.05;;
     private StretchAlgoLogic stretchAlgoLogic;
 
@@ -17,21 +21,25 @@ public class StretchAlgoTest extends AbstractAlgoTest {
 
     @Before
     public void setUp() {
-        // instantiate StretchAlgoLogic before each test
+        // initialize an instance of StretchAlgoLogic before each test for isolated testing
         stretchAlgoLogic = new StretchAlgoLogic();
     }
+    /**
+     * Tests if the algorithm creates profitable orders by verifying that
+     * the sell price is higher than the buy price after a price increase
+     */
 
     @Test
     public void testProfitability() throws Exception {
         send(createTick2());
-        // verify that buy order was created
+        // verify that buy order was created initially
         var buyOrders = container.getState().getChildOrders();
         assertEquals("Expected one buy order after first tick", 1, buyOrders.size());
         assertTrue("Order should be a BUY order", buyOrders.get(0).getSide() == Side.BUY);
 
         send(createTick3());
-        // verify that sell order was created
         var sellOrders = container.getState().getChildOrders();
+        // check that a sell order exists and that it is profitable
         assertTrue("Expected a sell order after price increase",
                 sellOrders.stream().anyMatch(order -> order.getSide() == Side.SELL));
 
@@ -40,18 +48,24 @@ public class StretchAlgoTest extends AbstractAlgoTest {
         var sellOrderOptional = sellOrders.stream()
                 .filter(order -> order.getSide() == Side.SELL)
                 .findFirst();
-        // check if a sell order exists and then compare prices
+        // verify profitability by comparing buy and sell prices
         assertTrue("Sell order should exist", sellOrderOptional.isPresent());
         long sellPrice = sellOrderOptional.get().getPrice();
         assertTrue("Sell price should be higher than buy price for profitability", sellPrice > buyPrice);
     }
-
+    /**
+     * ensures that no orders are created when the spread is too wide,
+     * as conditions like this are not favorable for trading
+     */
     @Test
     public void testNoActionOnWideSpread() throws Exception {
         send(createTickWithWideSpread());
         assertEquals(0, container.getState().getChildOrders().size());
     }
-
+    /**
+     * Tests if a buy order is canceled when the price moves unfavorably
+     * (due to low liquidity for example)
+     */
     @Test
     public void testOrderCancellationOnUnfavorablePriceMove() throws Exception {
         send(createTick2());
@@ -67,12 +81,15 @@ public class StretchAlgoTest extends AbstractAlgoTest {
         }
         assertTrue(container.getState().getActiveChildOrders().size() <= 6);
     }
-
+    /**
+     * tests if the algorithm correctly places a buy order in a bullish trend,
+     * when the ask price is slightly below the vwap
+     */
     @Test
     public void testTrendBasedBuying() throws Exception {
-        send(createTickWithBullishTrend());
-        stretchAlgoLogic.evaluate(container.getState()); // trigger evaluation to update internal state
-        double askPrice = stretchAlgoLogic.getVWAP() * 0.99; // slightly below vwap
+        send(createTickWithBullishTrend()); // simulate bullish trend
+        stretchAlgoLogic.evaluate(container.getState()); // update VWAP and internal state
+        double askPrice = stretchAlgoLogic.getVWAP() * 0.99; // slightly below vwap threshold for buying
         boolean shouldBuy = stretchAlgoLogic.shouldBuy((long) askPrice, 0);
 
         assertTrue("Algo should place a buy order in a bullish trend", shouldBuy);

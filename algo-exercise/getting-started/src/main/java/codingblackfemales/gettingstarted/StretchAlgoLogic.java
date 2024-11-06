@@ -48,7 +48,7 @@ public class StretchAlgoLogic implements AlgoLogic {
     private static final int TREND_PERIOD = 6;
     // cancellation conditions
     protected static final double CANCEL_THRESHOLD_PERCENTAGE = 0.05;
-    protected static final int PRICE_THRESHOLD = 5;
+    protected static final int PRICE_THRESHOLD =5;
     // ANSI colors for log messages
     public static final String ANSI_RESET = "\u001B[0m";
     public static final String ANSI_RED = "\u001B[31m";
@@ -98,6 +98,15 @@ public class StretchAlgoLogic implements AlgoLogic {
         // calc adaptive buy and sell thresholds
         double buyThreshold = vwap * BUY_THRESHOLD_FACTOR;
         double sellThreshold = vwap * SELL_THRESHOLD_FACTOR;
+        double cancelSellThreshold = vwap * (1 + CANCEL_THRESHOLD_PERCENTAGE);
+        // Log values for debugging
+        logger.info("[DEBUG] VWAP: " + vwap);
+        logger.info("[DEBUG] Buy Threshold: " + buyThreshold + ", Sell Threshold: " + sellThreshold);
+        logger.info("[DEBUG] Cancel Sell Threshold: " + cancelSellThreshold);
+        logger.info("[DEBUG] Current Ask Price: {}, Cancel Sell Threshold: {}", askPrice, cancelSellThreshold);
+
+
+
 
         // update recent price trends to track market movements
         updateTrends(bidPrice, askPrice);
@@ -117,31 +126,26 @@ public class StretchAlgoLogic implements AlgoLogic {
             logger.info(ANSI_GREEN +"[AMYSTRETCHALGO] Sell condition met. Placing sell order."+ ANSI_RESET);
             return new CreateChildOrder(Side.SELL, ORDER_QUANTITY, bidPrice);
         }
+        // Log the current VWAP and SellThreshold for debugging purposes
+        logger.info(ANSI_RED+"[DEBUG] VWAP: " + vwap + ", SellThreshold: "+ANSI_RESET + sellThreshold);
 
 //  ***** Cancellation Logic *****
-        if (!activeOrders.isEmpty()) {
             for (ChildOrder order : activeOrders) {
                 double cancelThreshold = vwap * CANCEL_THRESHOLD_PERCENTAGE;
                 long orderPrice = order.getPrice();
 
-                // check conditions for cancelling an active order
                 boolean cancelDueToVWAPDeviation = Math.abs(orderPrice - askPrice) > cancelThreshold;
                 boolean cancelDueToPriceThreshold = Math.abs(bidPrice - orderPrice) > PRICE_THRESHOLD;
 
-                // log debugging messages for cancellation logic
-                logger.info(ANSI_RED + "[MYSTRETCHALGO] Checking cancellation for order with price: " + orderPrice + ANSI_RESET);
-                logger.info(ANSI_RED + "[MYSTRETCHALGO] VWAP: " + vwap + ", Ask Price: " + askPrice + ", Bid Price: " + bidPrice + ANSI_RESET);
-                logger.info(ANSI_RED + "[MYSTRETCHALGO] Cancellation Threshold (VWAP Deviation): " + cancelThreshold +
-                        ", PRICE_THRESHOLD: " + PRICE_THRESHOLD + ANSI_RESET);
-                logger.info(ANSI_RED + "[MYSTRETCHALGO] Condition Check - Cancel Due to VWAP Deviation: " + cancelDueToVWAPDeviation +
-                        ", Cancel Due to Price Threshold: " + cancelDueToPriceThreshold + ANSI_RESET);
-                // cancel order if either condition is met
+                logger.info("[TEST] Evaluating order for cancellation: Order Price = " + orderPrice);
+                logger.info("[TEST] VWAP: " + vwap + ", Ask Price: " + askPrice + ", Bid Price: " + bidPrice);
+                logger.info("[TEST] cancelDueToVWAPDeviation = " + cancelDueToVWAPDeviation + ", cancelDueToPriceThreshold = " + cancelDueToPriceThreshold);
+
                 if (cancelDueToVWAPDeviation || cancelDueToPriceThreshold) {
-                    logger.info(ANSI_RED + "[MYSTRETCHALGO] Canceling order with price: " + orderPrice + " due to threshold deviation." + ANSI_RESET);
+                    logger.info("[TEST] Order canceled: Price = " + orderPrice);
                     return new CancelChildOrder(order);
                 }
             }
-        }
 
         logger.info(ANSI_BLUE +"[MYSTRETCHALGO] No action taken."+ ANSI_RESET);
         return NoAction.NoAction;
